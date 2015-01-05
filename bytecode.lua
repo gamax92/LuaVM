@@ -125,9 +125,13 @@ function bytecode.load(bc)
 		assert(fmtver == 0 or fmtver == 255, "unknown format version "..fmtver)
 	end
 	local types = ub(6)
+	--[[
 	if types ~= supportedTypes then
 		print("Warning: types do not match the currently running lua binary")
+		print("BC: " .. types:gsub(".",function(a) return string.format("%02X ",a:byte()) end))
+		print("VM: " .. supportedTypes:gsub(".",function(a) return string.format("%02X ",a:byte()) end))
 	end
+	--]]
 	integer = types:byte(2) == 8 and u8 or u4
 	if integer == u8 then print("Caution: Because you are on a 128bit(!?) platform, LuaVM2 will chop off the upper 4 bytes from integer!") end
 	size_t = types:byte(3) == 8 and u8 or u4

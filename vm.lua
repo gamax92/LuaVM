@@ -11,11 +11,7 @@ vm = {}
 vm.debug = false
 vm.typechecking = true
 
-local function debug(...)
-	if vm.debug then
-		print(...)
-	end
-end
+local debug = vm.debug and print or function() end
 
 local instructionNames = {
 	[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
@@ -45,7 +41,9 @@ local instructionFormats = {
 local band, brshift = bit.band, bit.brshift
 local tostring, unpack = tostring, unpack
 
-function vm.run(chunk, args, upvals, globals, hook)
+local vm_globals = {}
+
+function vm.run(chunk, args, upvals, globals, hook, yourself)
 	local R = {}
 	local top = 0
 	local pc = 0
@@ -54,6 +52,10 @@ function vm.run(chunk, args, upvals, globals, hook)
 	args = args or {}
 	upvals = upvals or {}
 	globals = globals or _G
+	yourself = yourself or "main"
+	if  vm_globals[yourself] == nil then
+		vm_globals[yourself] = globals
+	end
 	local openUpvalues = {}
 	for i=1,chunk.nparam do R[i-1] = args[i] top = i-1 end
 	
@@ -155,9 +157,9 @@ function vm.run(chunk, args, upvals, globals, hook)
 					pc = pc+1
 				end
 			elseif o == GETGLOBAL then
-				R[a] = globals[constants[b]]
+				R[a] = vm_globals[yourself][constants[b]]
 			elseif o == SETGLOBAL then
-				globals[constants[b]] = R[a]
+				vm_globals[yourself][constants[b]] = R[a]
 			elseif o == GETUPVAL then
 				R[a] = upvals[b]
 			elseif o == SETUPVAL then
@@ -344,9 +346,11 @@ function vm.run(chunk, args, upvals, globals, hook)
 						uvd.storage = v
 					end
 				end})
-				R[a] = function(...)
-					return vm.run(proto, {...}, upvalues, globals, hook)
+				local yourself
+				yourself = function(...)
+					return vm.run(proto, {...}, upvalues, vm_globals[yourself], hook, yourself)
 				end
+				R[a] = yourself
 				for i=1, proto.nupval do
 					local o,a,b,c = decodeInstruction(code[pc+i-1])
 					debug(pc+i,"PSD",instructionNames[o],a,b,c)
@@ -379,4 +383,27 @@ function vm.run(chunk, args, upvals, globals, hook)
 	else
 		return unpack(ret,2)
 	end]]
+end
+
+vm.lib = {}
+function vm.lib.setfenv(thing, env)
+	checkArg(2,env,"table")
+	checkArg(1,thing,"function","number")
+	if type(thing) == "number" then
+		error("bad argument #1 to 'setfenv' (invalid level)",2)
+	elseif vm_globals[thing] == nil then
+		error("'setfenv' cannot change environment of given object",2)
+	end
+	vm_globals[thing] = env
+	return thing
+end
+function vm.lib.getfenv(thing)
+	checkArg(1,thing,"function","number","nil")
+	if type(thing) == "number" then
+		error("bad argument #1 to 'getfenv' (invalid level)",2)
+	elseif type(thing) == "function" then
+		return vm_globals[thing] or vm_globals["main"]
+	else
+		return vm_globals["main"]
+	end
 end
