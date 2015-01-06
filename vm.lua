@@ -41,7 +41,7 @@ local instructionFormats = {
 local band, brshift = bit.band, bit.brshift
 local tostring, unpack = tostring, unpack
 
-local vm_globals = {}
+local vm_globals = setmetatable({},{__mode="k"})
 
 function vm.run(chunk, args, upvals, globals, hook, yourself)
 	local R = {}
@@ -53,7 +53,7 @@ function vm.run(chunk, args, upvals, globals, hook, yourself)
 	upvals = upvals or {}
 	globals = globals or _G
 	yourself = yourself or "main"
-	if  vm_globals[yourself] == nil then
+	if vm_globals[yourself] == nil then
 		vm_globals[yourself] = globals
 	end
 	local openUpvalues = {}
@@ -346,11 +346,12 @@ function vm.run(chunk, args, upvals, globals, hook, yourself)
 						uvd.storage = v
 					end
 				end})
-				local yourself
-				yourself = function(...)
-					return vm.run(proto, {...}, upvalues, vm_globals[yourself], hook, yourself)
+				local myself
+				myself = function(...)
+					return vm.run(proto, {...}, upvalues, vm_globals[myself], hook, myself)
 				end
-				R[a] = yourself
+				vm_globals[myself] = vm_globals[yourself]
+				R[a] = myself
 				for i=1, proto.nupval do
 					local o,a,b,c = decodeInstruction(code[pc+i-1])
 					debug(pc+i,"PSD",instructionNames[o],a,b,c)
